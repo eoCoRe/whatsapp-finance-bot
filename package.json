@@ -1,0 +1,25 @@
+{
+  "name": "whatsapp-finance-bot",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp para registro de gastos financeiros do casal",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
+    "@whiskeysockets/baileys": "^6.7.0",
+    "dotenv": "^16.4.5",
+    "google-auth-library": "^9.13.0",
+    "google-spreadsheet": "^4.1.4",
+    "pino": "^9.3.2",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  }
+}
