@@ -13,7 +13,7 @@ Bot de WhatsApp para registro automático de gastos financeiros do casal direto 
 
 - **Node.js + TypeScript**
 - **Baileys** — conexão com WhatsApp Web (sem API oficial)
-- **Claude Haiku** — extração de dados via LLM
+- **Gemini 2.0 Flash** — extração de dados via LLM (tier gratuito)
 - **Google Sheets API** — banco de dados via Service Account
 
 ## Pré-requisitos
@@ -37,7 +37,7 @@ Escaneie o QR Code que aparecer no terminal com o WhatsApp do seu celular.
 
 | Variável | Descrição |
 |---|---|
-| `ANTHROPIC_API_KEY` | Chave da API da Anthropic |
+| `GEMINI_API_KEY` | Chave da API do Google AI Studio (gratuita) |
 | `GOOGLE_SPREADSHEET_ID` | ID da planilha (da URL do Google Sheets) |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | E-mail da Service Account do Google Cloud |
 | `GOOGLE_PRIVATE_KEY` | Chave privada da Service Account (do arquivo JSON) |
