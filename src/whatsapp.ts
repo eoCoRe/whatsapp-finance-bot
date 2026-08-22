@@ -37,8 +37,15 @@ export async function connectToWhatsApp(onMessage: MessageHandler): Promise<void
     }
 
     if (connection === 'close') {
-      const shouldReconnect =
-        (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+      const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+      if (statusCode === DisconnectReason.connectionReplaced) {
+        console.log(
+          '⚠️ CONFLITO: outra instância do bot conectou com a mesma sessão e derrubou esta conexão. ' +
+          'Verifique se não há dois processos do bot rodando ao mesmo tempo (isso pode fazer mensagens se perderem).'
+        );
+      }
 
       console.log('Conexão encerrada. Reconectando:', shouldReconnect);
 
@@ -53,7 +60,16 @@ export async function connectToWhatsApp(onMessage: MessageHandler): Promise<void
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
+    // 'notify' = mensagem chegou com o bot online; 'append' = mensagem que
+    // ficou represada e o WhatsApp entrega ao reconectar (bot estava offline).
+    // Processamos os dois pra não perder gasto mandado com o PC desligado.
+    console.log(
+      `[msg.upsert] type=${type} count=${messages.length} ${messages
+        .map(m => `(from=${m.key.remoteJid} fromMe=${m.key.fromMe} id=${m.key.id})`)
+        .join(' ')}`
+    );
+
+    if (type !== 'notify' && type !== 'append') return;
 
     for (const msg of messages) {
       if (!msg.message || msg.key.fromMe) continue;

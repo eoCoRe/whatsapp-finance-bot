@@ -53,6 +53,14 @@ async function main() {
     toCreate.push({ addSheet: { properties: { title: 'Gastos', index: 0 } } });
   if (!existing.find(s => s.properties?.title === 'Resumo'))
     toCreate.push({ addSheet: { properties: { title: 'Resumo', index: 1 } } });
+  if (!existing.find(s => s.properties?.title === 'Financiamentos'))
+    toCreate.push({ addSheet: { properties: { title: 'Financiamentos', index: 2 } } });
+  if (!existing.find(s => s.properties?.title === 'Metas'))
+    toCreate.push({ addSheet: { properties: { title: 'Metas', index: 3 } } });
+  if (!existing.find(s => s.properties?.title === 'Renda'))
+    toCreate.push({ addSheet: { properties: { title: 'Renda', index: 4 } } });
+  if (!existing.find(s => s.properties?.title === 'GastosFixos'))
+    toCreate.push({ addSheet: { properties: { title: 'GastosFixos', index: 5 } } });
 
   if (toCreate.length > 0) {
     await sheets.spreadsheets.batchUpdate({
@@ -66,6 +74,10 @@ async function main() {
   const allSheets = refreshed.data.sheets ?? [];
   const gastosId = allSheets.find(s => s.properties?.title === 'Gastos')!.properties!.sheetId!;
   const resumoId = allSheets.find(s => s.properties?.title === 'Resumo')!.properties!.sheetId!;
+  const financiamentosId = allSheets.find(s => s.properties?.title === 'Financiamentos')!.properties!.sheetId!;
+  const metasId = allSheets.find(s => s.properties?.title === 'Metas')!.properties!.sheetId!;
+  const rendaId = allSheets.find(s => s.properties?.title === 'Renda')!.properties!.sheetId!;
+  const gastosFixosId = allSheets.find(s => s.properties?.title === 'GastosFixos')!.properties!.sheetId!;
 
   // =========================================================
   // ABA: GASTOS
@@ -255,8 +267,254 @@ async function main() {
     },
   });
 
+  // =========================================================
+  // ABA: FINANCIAMENTOS
+  // =========================================================
+  console.log('🚗 Formatando aba Financiamentos...');
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'Financiamentos!A1:H1',
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [['ID', 'Descricao', 'Tipo', 'Responsavel', 'ValorParcela', 'ParcelasPagas', 'ParcelasTotais', 'DataCadastro']],
+    },
+  });
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: { sheetId: financiamentosId, gridProperties: { frozenRowCount: 1 } },
+            fields: 'gridProperties.frozenRowCount',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: financiamentosId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 8 },
+            cell: headerCell('#1b5e20'),
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+          },
+        },
+        {
+          updateDimensionProperties: {
+            range: { sheetId: financiamentosId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+            properties: { pixelSize: 42 },
+            fields: 'pixelSize',
+          },
+        },
+        ...[110, 220, 140, 160, 130, 130, 130, 130].map((px, i) => ({
+          updateDimensionProperties: {
+            range: { sheetId: financiamentosId, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
+            properties: { pixelSize: px },
+            fields: 'pixelSize',
+          },
+        })),
+        // Coluna ValorParcela → formato moeda
+        {
+          repeatCell: {
+            range: { sheetId: financiamentosId, startRowIndex: 1, endRowIndex: 5000, startColumnIndex: 4, endColumnIndex: 5 },
+            cell: { userEnteredFormat: { numberFormat: currencyFmt() } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+        {
+          updateBorders: {
+            range: { sheetId: financiamentosId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 8 },
+            bottom: { style: 'SOLID_MEDIUM', color: hex('#ffffff') },
+          },
+        },
+      ],
+    },
+  });
+
+  // =========================================================
+  // ABA: METAS
+  // =========================================================
+  console.log('🎯 Formatando aba Metas...');
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'Metas!A1:C1',
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [['Responsavel', 'Categoria', 'ValorMeta']],
+    },
+  });
+
+  // Só preenche as combinações se a aba ainda estiver vazia (não sobrescreve metas já definidas)
+  const metasAtuais = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'Metas!A2:A',
+  });
+
+  if (!metasAtuais.data.values || metasAtuais.data.values.length === 0) {
+    const seedRows = [USER1_NAME, USER2_NAME].flatMap(pessoa =>
+      CATEGORIES.map(cat => [pessoa, cat, 0])
+    );
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'Metas!A2',
+      valueInputOption: 'RAW',
+      requestBody: { values: seedRows },
+    });
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: { sheetId: metasId, gridProperties: { frozenRowCount: 1 } },
+            fields: 'gridProperties.frozenRowCount',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: metasId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 3 },
+            cell: headerCell('#1b5e20'),
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+          },
+        },
+        ...[160, 220, 160].map((px, i) => ({
+          updateDimensionProperties: {
+            range: { sheetId: metasId, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
+            properties: { pixelSize: px },
+            fields: 'pixelSize',
+          },
+        })),
+        {
+          repeatCell: {
+            range: { sheetId: metasId, startRowIndex: 1, endRowIndex: 5000, startColumnIndex: 2, endColumnIndex: 3 },
+            cell: { userEnteredFormat: { numberFormat: currencyFmt() } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+        {
+          updateBorders: {
+            range: { sheetId: metasId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 3 },
+            bottom: { style: 'SOLID_MEDIUM', color: hex('#ffffff') },
+          },
+        },
+      ],
+    },
+  });
+
+  // =========================================================
+  // ABA: RENDA
+  // =========================================================
+  console.log('💵 Formatando aba Renda...');
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'Renda!A1:D1',
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [['Responsavel', 'Descricao', 'Valor', 'DataCadastro']],
+    },
+  });
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: { sheetId: rendaId, gridProperties: { frozenRowCount: 1 } },
+            fields: 'gridProperties.frozenRowCount',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: rendaId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
+            cell: headerCell('#1b5e20'),
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+          },
+        },
+        ...[160, 200, 130, 130].map((px, i) => ({
+          updateDimensionProperties: {
+            range: { sheetId: rendaId, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
+            properties: { pixelSize: px },
+            fields: 'pixelSize',
+          },
+        })),
+        {
+          repeatCell: {
+            range: { sheetId: rendaId, startRowIndex: 1, endRowIndex: 5000, startColumnIndex: 2, endColumnIndex: 3 },
+            cell: { userEnteredFormat: { numberFormat: currencyFmt() } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+        {
+          updateBorders: {
+            range: { sheetId: rendaId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
+            bottom: { style: 'SOLID_MEDIUM', color: hex('#ffffff') },
+          },
+        },
+      ],
+    },
+  });
+
+  // =========================================================
+  // ABA: GASTOS FIXOS
+  // =========================================================
+  console.log('🔁 Formatando aba GastosFixos...');
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'GastosFixos!A1:H1',
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [['ID', 'Descricao', 'Categoria', 'Valor', 'Responsavel', 'DiaVencimento', 'UltimoMesLancado', 'DataCadastro']],
+    },
+  });
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: { sheetId: gastosFixosId, gridProperties: { frozenRowCount: 1 } },
+            fields: 'gridProperties.frozenRowCount',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId: gastosFixosId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 8 },
+            cell: headerCell('#1b5e20'),
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+          },
+        },
+        ...[110, 200, 140, 110, 160, 130, 150, 130].map((px, i) => ({
+          updateDimensionProperties: {
+            range: { sheetId: gastosFixosId, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
+            properties: { pixelSize: px },
+            fields: 'pixelSize',
+          },
+        })),
+        {
+          repeatCell: {
+            range: { sheetId: gastosFixosId, startRowIndex: 1, endRowIndex: 5000, startColumnIndex: 3, endColumnIndex: 4 },
+            cell: { userEnteredFormat: { numberFormat: currencyFmt() } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+        {
+          updateBorders: {
+            range: { sheetId: gastosFixosId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 8 },
+            bottom: { style: 'SOLID_MEDIUM', color: hex('#ffffff') },
+          },
+        },
+      ],
+    },
+  });
+
   console.log('\n✅ Planilha configurada com sucesso!');
-  console.log('📋 Abas criadas: Gastos | Resumo');
+  console.log('📋 Abas criadas: Gastos | Resumo | Financiamentos | Metas | Renda | GastosFixos');
   console.log('🔗 Acesse: https://docs.google.com/spreadsheets/d/' + SPREADSHEET_ID);
 }
 

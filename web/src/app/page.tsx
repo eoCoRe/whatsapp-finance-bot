@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { fetchExpenses } from '@/lib/sheets';
 import { buildTrend, listAvailableMonths, summarizeMonth } from '@/lib/aggregate';
 import { formatMonthLabel } from '@/lib/format';
@@ -7,6 +8,7 @@ import BarChartHorizontal from '@/components/BarChartHorizontal';
 import LineChartMulti from '@/components/LineChartMulti';
 import ExpenseTable from '@/components/ExpenseTable';
 import ThemeToggle from '@/components/ThemeToggle';
+import BrandHeader from '@/components/BrandHeader';
 
 function currentMonthKey(): string {
   const now = new Date();
@@ -49,10 +51,15 @@ export default async function Home({
   return (
     <div className="page">
       <header className="page-header">
-        <div>
-          <h1>🐶💰 Leitãozinho Financeiro</h1>
-          <p className="page-header__subtitle">Painel de gastos do casal</p>
-        </div>
+        <BrandHeader
+          title="Leitãozinho Financeiro"
+          subtitle={
+            <>
+              Painel de gastos do casal · <Link href="/financiamentos">Financiamentos e dívidas →</Link>{' '}
+              · <Link href="/metas">Metas de gasto →</Link> · <Link href="/orcamento">Orçamento →</Link>
+            </>
+          }
+        />
         <ThemeToggle />
       </header>
 

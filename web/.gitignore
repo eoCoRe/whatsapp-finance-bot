@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# fotos originais do Leitãozinho (arquivo pessoal, não precisa ir pro repo)
+/leitaozinho-fotos-originais/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

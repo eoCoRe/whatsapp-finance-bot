@@ -52,7 +52,7 @@ export default function LineChartMulti({ trend, series }: LineChartMultiProps) {
     trend.length === 1 ? PAD_LEFT + innerWidth / 2 : PAD_LEFT + (i / (trend.length - 1)) * innerWidth;
   const yFor = (value: number) => PAD_TOP + innerHeight - (value / max) * innerHeight;
 
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(max * f));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => ({ frac: f, value: Math.round(max * f) }));
   const labelStep = trend.length > 8 ? 2 : 1;
 
   function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
@@ -67,6 +67,14 @@ export default function LineChartMulti({ trend, series }: LineChartMultiProps) {
 
   const hovered = hoverIndex !== null ? trend[hoverIndex] : null;
   const hoveredX = hoverIndex !== null ? xFor(hoverIndex) : null;
+
+  // Rótulos de fim de linha só aparecem se não colidirem entre si — do
+  // contrário o texto sobrepõe e fica ilegível; a legenda já cobre a identidade.
+  const lastIdx = trend.length - 1;
+  const endLabelYs = series.map(s => yFor(trend[lastIdx].byPerson[s.key] ?? 0));
+  const labelsCollide = endLabelYs.some((y, i) =>
+    endLabelYs.some((otherY, j) => i !== j && Math.abs(y - otherY) < 14)
+  );
 
   return (
     <div className="line-chart">
@@ -89,16 +97,16 @@ export default function LineChartMulti({ trend, series }: LineChartMultiProps) {
         aria-label="Gráfico de tendência de gastos por mês"
       >
         {ticks.map(tick => (
-          <g key={tick}>
+          <g key={tick.frac}>
             <line
               x1={PAD_LEFT}
               x2={WIDTH - PAD_RIGHT}
-              y1={yFor(tick)}
-              y2={yFor(tick)}
+              y1={yFor(tick.value)}
+              y2={yFor(tick.value)}
               className="grid-line"
             />
-            <text x={PAD_LEFT - 8} y={yFor(tick)} className="axis-label" textAnchor="end" dy="0.32em">
-              {formatCompactBRL(tick)}
+            <text x={PAD_LEFT - 8} y={yFor(tick.value)} className="axis-label" textAnchor="end" dy="0.32em">
+              {formatCompactBRL(tick.value)}
             </text>
           </g>
         ))}
@@ -156,22 +164,22 @@ export default function LineChartMulti({ trend, series }: LineChartMultiProps) {
           ))
         )}
 
-        {series.map(s => {
-          const lastIdx = trend.length - 1;
-          const lastValue = trend[lastIdx].byPerson[s.key] ?? 0;
-          return (
-            <text
-              key={`${s.key}-label`}
-              x={xFor(lastIdx) + 8}
-              y={yFor(lastValue)}
-              className="line-end-label"
-              dy="0.32em"
-              fill="var(--text-secondary)"
-            >
-              {s.name}
-            </text>
-          );
-        })}
+        {!labelsCollide &&
+          series.map(s => {
+            const lastValue = trend[lastIdx].byPerson[s.key] ?? 0;
+            return (
+              <text
+                key={`${s.key}-label`}
+                x={xFor(lastIdx) + 8}
+                y={yFor(lastValue)}
+                className="line-end-label"
+                dy="0.32em"
+                fill="var(--text-secondary)"
+              >
+                {s.name}
+              </text>
+            );
+          })}
       </svg>
 
       {hovered && hoveredX !== null && (
