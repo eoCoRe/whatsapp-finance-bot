@@ -140,8 +140,9 @@ async function main() {
   // =========================================================
   console.log('📈 Configurando aba Resumo...');
 
+  // Planilhas em locale pt_BR exigem ";" como separador de argumentos (a vírgula é o separador decimal).
   const mthFormula = (col: string, filter?: string) => {
-    const baseFilter = `(TEXT(Gastos!A2:A5000,"MM/YYYY")=TEXT(TODAY(),"MM/YYYY"))`;
+    const baseFilter = `(TEXT(Gastos!A2:A5000;"MM/YYYY")=TEXT(TODAY();"MM/YYYY"))`;
     const extra = filter ? `*(${filter})` : '';
     return `=SUMPRODUCT(${baseFilter}${extra}*(ISNUMBER(Gastos!C2:C5000))*Gastos!${col}2:${col}5000)`;
   };
@@ -149,7 +150,7 @@ async function main() {
   const resumoData = [
     ['💰 RESUMO DE GASTOS DO CASAL', '', ''],
     ['', '', ''],
-    ['Mês de referência:', '=TEXT(TODAY(),"MMMM/YYYY")', ''],
+    ['Mês de referência:', '=TEXT(TODAY();"MMMM/YYYY")', ''],
     ['', '', ''],
     ['👥 POR PESSOA', 'Valor (mês atual)', ''],
     ['Total Geral', mthFormula('C'), ''],

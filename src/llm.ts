@@ -20,18 +20,39 @@ Débito, Crédito, Pix, Dinheiro, Boleto
 Exemplo de entrada: "gastei 45 reais no mercado no cartão de crédito"
 Exemplo de saída: {"valor":45.00,"categoria":"Mercado","forma_pagamento":"Crédito","descricao":"Compras no mercado"}`;
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export async function parseExpenseFromMessage(message: string): Promise<ParsedExpense | null> {
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.6-flash',
     systemInstruction: SYSTEM_PROMPT,
   });
 
-  const result = await model.generateContent(message);
-  const rawText = result.response.text().trim();
+  const MAX_ATTEMPTS = 3;
+  let lastErr: unknown;
 
-  const parsed: ParsedExpense = JSON.parse(rawText);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const result = await model.generateContent(message);
+      const rawText = result.response.text().trim();
 
-  if (!parsed.valor || parsed.valor === 0) return null;
+      const parsed: ParsedExpense = JSON.parse(rawText);
 
-  return parsed;
+      if (!parsed.valor || parsed.valor === 0) return null;
+
+      return parsed;
+    } catch (err) {
+      lastErr = err;
+      const status = (err as { status?: number }).status;
+      const isRetryable = status === 503 || status === 429;
+
+      if (!isRetryable || attempt === MAX_ATTEMPTS) break;
+
+      await sleep(attempt * 1000);
+    }
+  }
+
+  throw lastErr;
 }

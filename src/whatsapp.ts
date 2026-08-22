@@ -7,12 +7,13 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
+import qrcode from 'qrcode-terminal';
 
 const logger = pino({ level: 'silent' });
 
 let sock: WASocket | null = null;
 
-type MessageHandler = (from: string, text: string) => Promise<void>;
+type MessageHandler = (chatId: string, senderJid: string, text: string) => Promise<void>;
 
 export async function connectToWhatsApp(onMessage: MessageHandler): Promise<void> {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -25,13 +26,16 @@ export async function connectToWhatsApp(onMessage: MessageHandler): Promise<void
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
-    printQRInTerminal: true,
     generateHighQualityLinkPreview: false,
   });
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect }) => {
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (qr) {
+      qrcode.generate(qr, { small: true });
+    }
+
     if (connection === 'close') {
       const shouldReconnect =
         (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
@@ -54,8 +58,14 @@ export async function connectToWhatsApp(onMessage: MessageHandler): Promise<void
     for (const msg of messages) {
       if (!msg.message || msg.key.fromMe) continue;
 
-      const from = msg.key.remoteJid;
-      if (!from) continue;
+      const chatId = msg.key.remoteJid;
+      if (!chatId) continue;
+
+      // Em grupos, remoteJid é o ID do grupo; quem enviou vem em participant.
+      // O WhatsApp pode usar JIDs @lid (privados) em vez do número real; as
+      // variantes *Pn trazem o JID com o número de telefone de fato.
+      const senderJid =
+        msg.key.participantPn || msg.key.senderPn || msg.key.participant || chatId;
 
       const text =
         msg.message.conversation ||
@@ -64,7 +74,7 @@ export async function connectToWhatsApp(onMessage: MessageHandler): Promise<void
 
       if (!text.trim()) continue;
 
-      await onMessage(from, text);
+      await onMessage(chatId, senderJid, text);
     }
   });
 }
