@@ -1,4 +1,4 @@
-import { Financing } from './types';
+import { Expense, Financing, ResumoPeriodo } from './types';
 
 function pick<T>(options: T[]): T {
   return options[Math.floor(Math.random() * options.length)];
@@ -33,13 +33,14 @@ const GASTO_SIGN_OFFS = [
 export function gastoConfirmado(
   parent: string,
   expense: { valor: number; categoria: string; formaPagamento: string; descricao: string },
-  metaLine?: string | null
+  extraLines: (string | null | undefined)[] = []
 ): string {
+  const extras = extraLines.filter(Boolean).join('\n');
   return (
     `${pick(GASTO_CONFIRMADO)(parent)}\n` +
     `💸 ${formatBRL(expense.valor)} em *${expense.categoria}*\n` +
     `💳 ${expense.formaPagamento} | 📝 ${expense.descricao}\n` +
-    (metaLine ? `${metaLine}\n` : '') +
+    (extras ? `${extras}\n` : '') +
     `\n${pick(GASTO_SIGN_OFFS)}`
   );
 }
@@ -69,7 +70,8 @@ const NAO_IDENTIFICADO = [
     `• "paguei a parcela do carro"\n` +
     `• "meta de 540 por mês no mercado"\n` +
     `• "meu salário é 5000 por mês"\n` +
-    `• "a internet é 120, vence dia 10" 🐾`,
+    `• "a internet é 120, vence dia 10"\n` +
+    `• "apaga o último gasto" 🐾`,
   (parent: string) =>
     `🐶❓ Xiii ${parent}, essa eu não entendi! Pode ser algo tipo:\n` +
     `• "gastei 30 na farmácia no pix"\n` +
@@ -310,4 +312,110 @@ const GASTO_FIXO_AUTO_LANCADO = [
 
 export function gastoFixoAutoLancado(descricao: string, valor: number): string {
   return pick(GASTO_FIXO_AUTO_LANCADO)(descricao, valor);
+}
+
+// ---------- Desfazer último gasto ----------
+
+const GASTO_REMOVIDO = [
+  (parent: string, e: Expense) => `🗑️🐶 Prontinho, ${parent}! Apaguei o último gasto:`,
+  (parent: string, e: Expense) => `🐷✂️ Beleza, ${parent}! Desfiz esse lançamento aqui:`,
+  (parent: string, e: Expense) => `🐾↩️ Feito, ${parent}! Tirei da planilha:`,
+];
+
+export function gastoRemovido(parent: string, expense: Expense): string {
+  return (
+    `${pick(GASTO_REMOVIDO)(parent, expense)}\n` +
+    `💸 ${formatBRL(expense.valor)} em *${expense.categoria}*\n` +
+    `💳 ${expense.formaPagamento} | 📝 ${expense.descricao}\n\n` +
+    `Pode mandar de novo certinho quando quiser! 🐾`
+  );
+}
+
+const NADA_PARA_REMOVER = [
+  (parent: string) => `🤔🐽 Não achei nenhum gasto seu recente pra apagar, ${parent}. 🐾`,
+  (parent: string) => `🐶❓ Hmm ${parent}, não tenho nenhum gasto seu registrado pra desfazer. 🐾`,
+];
+
+export function nadaParaRemover(parent: string): string {
+  return pick(NADA_PARA_REMOVER)(parent);
+}
+
+const ERRO_REMOVER_GASTO = [
+  (parent: string) => `😥 Quis apagar o gasto, ${parent}, mas travei tentando mexer na planilha. Confere aí? 🐾`,
+  (parent: string) => `🙈🐷 ${parent}, travei tentando desfazer esse gasto. Dá uma olhada na planilha pra mim? 🐾`,
+];
+
+export function erroRemoverGasto(parent: string): string {
+  return pick(ERRO_REMOVER_GASTO)(parent);
+}
+
+// ---------- Resumos periódicos (proativos) ----------
+
+function listaPorResponsavel(porResponsavel: Record<string, number>): string {
+  return Object.entries(porResponsavel)
+    .sort((a, b) => b[1] - a[1])
+    .map(([nome, valor]) => `   • ${nome}: ${formatBRL(valor)}`)
+    .join('\n');
+}
+
+function listaTopCategorias(porCategoria: { categoria: string; total: number }[]): string {
+  return porCategoria
+    .slice(0, 3)
+    .map(c => `   • ${c.categoria}: ${formatBRL(c.total)}`)
+    .join('\n');
+}
+
+export function resumoSemanal(resumo: ResumoPeriodo): string {
+  const porPessoa = listaPorResponsavel(resumo.porResponsavel);
+  const topCategorias = listaTopCategorias(resumo.porCategoria);
+
+  return (
+    `📊🐷 Resumo dos últimos 7 dias, gente!\n\n` +
+    `💰 Total gasto: ${formatBRL(resumo.totalGeral)}\n` +
+    (porPessoa ? `\n👥 Por pessoa:\n${porPessoa}\n` : '') +
+    (topCategorias ? `\n🏷️ Top categorias:\n${topCategorias}\n` : '') +
+    `\nBora fechar mais uma semana no azul! 🐾`
+  );
+}
+
+export function resumoMensal(resumo: ResumoPeriodo, rendaTotal: number): string {
+  const porPessoa = listaPorResponsavel(resumo.porResponsavel);
+  const topCategorias = listaTopCategorias(resumo.porCategoria);
+  const saldoLine =
+    rendaTotal > 0
+      ? `\n📈 Renda do mês: ${formatBRL(rendaTotal)} | Saldo: ${formatBRL(rendaTotal - resumo.totalGeral)}\n`
+      : '';
+
+  return (
+    `📅🐷 Fechamento do mês passado!\n\n` +
+    `💰 Total gasto: ${formatBRL(resumo.totalGeral)}\n` +
+    saldoLine +
+    (porPessoa ? `\n👥 Por pessoa:\n${porPessoa}\n` : '') +
+    (topCategorias ? `\n🏷️ Top categorias:\n${topCategorias}\n` : '') +
+    `\nMais um mês registrado com sucesso! 🐾`
+  );
+}
+
+// ---------- Alerta de orçamento geral (renda x gasto do mês) ----------
+
+export function orcamentoGeralAlerta(gastoTotal: number, rendaTotal: number): string | null {
+  if (rendaTotal <= 0) return null;
+
+  const pct = (gastoTotal / rendaTotal) * 100;
+
+  if (pct >= 100) {
+    return `🚨🏠 Orçamento geral estourado! Já foi ${formatBRL(gastoTotal)} de ${formatBRL(rendaTotal)} de renda esse mês.`;
+  }
+
+  if (pct >= 80) {
+    return `⚠️🏠 Atenção! O gasto geral do mês já é ${pct.toFixed(0)}% da renda (${formatBRL(gastoTotal)} de ${formatBRL(rendaTotal)}).`;
+  }
+
+  return null;
+}
+
+// ---------- Erro no backup automático ----------
+
+export function erroBackup(): string {
+  return '⚠️🐷 O backup automático da planilha falhou essa semana. Vale a pena checar as permissões da Service Account no Google Drive. 🐾';
 }

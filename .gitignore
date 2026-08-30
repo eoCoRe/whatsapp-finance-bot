@@ -3,3 +3,4 @@ dist/
 auth_info_baileys/
 .env
 *.log
+bot-state.json

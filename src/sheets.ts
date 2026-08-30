@@ -1,6 +1,6 @@
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
-import { Expense, Financing, FinancingType, FixedExpense } from './types';
+import { Expense, Financing, FinancingType, FixedExpense, ResumoPeriodo } from './types';
 
 let doc: GoogleSpreadsheet | null = null;
 
@@ -35,6 +35,40 @@ export async function appendExpenseRow(expense: Expense): Promise<void> {
     FormaPagamento: expense.formaPagamento,
     Descricao: expense.descricao,
   });
+}
+
+// Remove o gasto mais recente lançado por esse responsável específico (não
+// mexe em gastos do outro usuário, mesmo que sejam mais recentes na planilha).
+export async function removerUltimoGasto(responsavel: string): Promise<Expense | null> {
+  const spreadsheet = await getSheet();
+  const sheetName = process.env.GOOGLE_SHEET_NAME ?? 'Gastos';
+  const sheet = spreadsheet.sheetsByTitle[sheetName];
+
+  if (!sheet) {
+    throw new Error(`Aba "${sheetName}" não encontrada na planilha.`);
+  }
+
+  const rows = await sheet.getRows();
+  const alvoResp = normalize(responsavel);
+
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row = rows[i];
+    if (normalize(String(row.get('Responsavel') ?? '')) !== alvoResp) continue;
+
+    const expense: Expense = {
+      valor: parseNumber(row.get('Valor')),
+      categoria: String(row.get('Categoria') ?? ''),
+      formaPagamento: String(row.get('FormaPagamento') ?? ''),
+      descricao: String(row.get('Descricao') ?? ''),
+      responsavel: String(row.get('Responsavel') ?? ''),
+      data: String(row.get('Data') ?? ''),
+    };
+
+    await row.delete();
+    return expense;
+  }
+
+  return null;
 }
 
 const FINANCING_SHEET_NAME = 'Financiamentos';
@@ -255,6 +289,75 @@ export async function getGastoMesPorCategoria(categoria: string, responsavel: st
   return total;
 }
 
+export async function getGastoMesTotal(): Promise<number> {
+  const spreadsheet = await getSheet();
+  const sheetName = process.env.GOOGLE_SHEET_NAME ?? 'Gastos';
+  const sheet = spreadsheet.sheetsByTitle[sheetName];
+
+  if (!sheet) {
+    throw new Error(`Aba "${sheetName}" não encontrada na planilha.`);
+  }
+
+  const rows = await sheet.getRows();
+  const now = new Date();
+  const mesAtual = `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+
+  let total = 0;
+  for (const row of rows) {
+    const data = String(row.get('Data') ?? '');
+    const match = data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) continue;
+
+    const [, , mm, yyyy] = match;
+    if (`${mm}/${yyyy}` !== mesAtual) continue;
+
+    total += parseNumber(row.get('Valor'));
+  }
+
+  return total;
+}
+
+// Agrega os gastos de todos os responsáveis dentro de uma janela de datas
+// [desde, ate) — usado pelos resumos periódicos (semanal/mensal).
+export async function getResumoPeriodo(desde: Date, ate: Date): Promise<ResumoPeriodo> {
+  const spreadsheet = await getSheet();
+  const sheetName = process.env.GOOGLE_SHEET_NAME ?? 'Gastos';
+  const sheet = spreadsheet.sheetsByTitle[sheetName];
+
+  if (!sheet) {
+    throw new Error(`Aba "${sheetName}" não encontrada na planilha.`);
+  }
+
+  const rows = await sheet.getRows();
+  let totalGeral = 0;
+  const porResponsavel: Record<string, number> = {};
+  const porCategoriaMap: Record<string, number> = {};
+
+  for (const row of rows) {
+    const data = String(row.get('Data') ?? '');
+    const match = data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) continue;
+
+    const [, dd, mm, yyyy] = match;
+    const rowDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    if (rowDate < desde || rowDate >= ate) continue;
+
+    const valor = parseNumber(row.get('Valor'));
+    const responsavel = String(row.get('Responsavel') ?? '');
+    const categoria = String(row.get('Categoria') ?? '');
+
+    totalGeral += valor;
+    porResponsavel[responsavel] = (porResponsavel[responsavel] ?? 0) + valor;
+    porCategoriaMap[categoria] = (porCategoriaMap[categoria] ?? 0) + valor;
+  }
+
+  const porCategoria = Object.entries(porCategoriaMap)
+    .map(([categoria, total]) => ({ categoria, total }))
+    .sort((a, b) => b.total - a.total);
+
+  return { totalGeral, porResponsavel, porCategoria };
+}
+
 const RENDA_SHEET_NAME = 'Renda';
 
 async function getRendaSheet() {
@@ -299,6 +402,17 @@ export async function getRendaTotal(responsavel: string): Promise<number> {
   let total = 0;
   for (const row of rows) {
     if (normalize(String(row.get('Responsavel') ?? '')) !== alvoResp) continue;
+    total += parseNumber(row.get('Valor'));
+  }
+  return total;
+}
+
+export async function getRendaTotalGeral(): Promise<number> {
+  const sheet = await getRendaSheet();
+  const rows = await sheet.getRows();
+
+  let total = 0;
+  for (const row of rows) {
     total += parseNumber(row.get('Valor'));
   }
   return total;

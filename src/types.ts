@@ -68,6 +68,12 @@ export interface FixedExpense {
   dataCadastro: string;
 }
 
+export interface ResumoPeriodo {
+  totalGeral: number;
+  porResponsavel: Record<string, number>;
+  porCategoria: { categoria: string; total: number }[];
+}
+
 export type ParsedMessage =
   | ({ tipo: 'gasto' } & ParsedExpense)
   | ({ tipo: 'financiamento_novo' } & ParsedFinancingNew)
@@ -75,4 +81,5 @@ export type ParsedMessage =
   | ({ tipo: 'definir_meta' } & ParsedMetaDefinida)
   | ({ tipo: 'renda_nova' } & ParsedRendaNova)
   | ({ tipo: 'gasto_fixo_novo' } & ParsedGastoFixoNovo)
+  | { tipo: 'desfazer_ultimo_gasto' }
   | { tipo: 'nao_identificado' };

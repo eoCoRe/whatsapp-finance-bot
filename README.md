@@ -42,6 +42,7 @@ Escaneie o QR Code que aparecer no terminal com o WhatsApp do seu celular.
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | E-mail da Service Account do Google Cloud |
 | `GOOGLE_PRIVATE_KEY` | Chave privada da Service Account (do arquivo JSON) |
 | `GOOGLE_SHEET_NAME` | Nome da aba da planilha (padrão: `Gastos`) |
+| `GOOGLE_BACKUP_SHARE_EMAIL` | (Opcional) e-mail pra compartilhar o backup semanal da planilha |
 | `USER1_NUMBER` | Número do usuário 1 (ex: `5511999999999`) |
 | `USER1_NAME` | Nome do usuário 1 |
 | `USER2_NUMBER` | Número do usuário 2 |
@@ -58,7 +59,7 @@ A aba deve ter as seguintes colunas (linha 1 como cabeçalho):
 
 1. Acesse [console.cloud.google.com](https://console.cloud.google.com)
 2. Crie um projeto ou selecione um existente
-3. Ative a **Google Sheets API**
+3. Ative a **Google Sheets API** e a **Google Drive API** (essa última é usada pro backup automático semanal da planilha)
 4. Em *IAM & Admin > Service Accounts*, crie uma nova Service Account
 5. Gere e baixe a chave JSON
 6. Compartilhe sua planilha com o e-mail da Service Account (permissão de Editor)

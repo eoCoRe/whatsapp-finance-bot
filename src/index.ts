@@ -10,8 +10,11 @@ import {
   getGastoMesPorCategoria,
   setRenda,
   appendGastoFixo,
+  removerUltimoGasto,
+  getGastoMesTotal,
+  getRendaTotalGeral,
 } from './sheets';
-import { checkGastosFixos } from './scheduler';
+import { checkGastosFixos, checkResumosEBackup } from './scheduler';
 import { Expense } from './types';
 import * as msg from './messages';
 
@@ -96,8 +99,33 @@ async function handleMessage(chatId: string, senderJid: string, text: string): P
       console.error('Erro ao checar meta da categoria:', err);
     }
 
-    await sendMessage(chatId, msg.gastoConfirmado(parent, expense, metaLine));
+    let orcamentoLine: string | null = null;
+    try {
+      const gastoTotalMes = await getGastoMesTotal();
+      const rendaTotalGeral = await getRendaTotalGeral();
+      orcamentoLine = msg.orcamentoGeralAlerta(gastoTotalMes, rendaTotalGeral);
+    } catch (err) {
+      console.error('Erro ao checar orçamento geral:', err);
+    }
+
+    await sendMessage(chatId, msg.gastoConfirmado(parent, expense, [metaLine, orcamentoLine]));
     console.log(`✅ Gasto registrado para ${senderName}: R$ ${expense.valor} em ${expense.categoria}`);
+    return;
+  }
+
+  if (parsed.tipo === 'desfazer_ultimo_gasto') {
+    try {
+      const removido = await removerUltimoGasto(senderName);
+      if (!removido) {
+        await sendMessage(chatId, msg.nadaParaRemover(parent));
+      } else {
+        await sendMessage(chatId, msg.gastoRemovido(parent, removido));
+        console.log(`🗑️ Gasto removido para ${senderName}: R$ ${removido.valor} em ${removido.categoria}`);
+      }
+    } catch (err) {
+      console.error('Erro ao remover último gasto:', err);
+      await sendMessage(chatId, msg.erroRemoverGasto(parent));
+    }
     return;
   }
 
@@ -203,6 +231,16 @@ async function notifyByName(responsavel: string, text: string): Promise<void> {
   await sendMessage(jid, text);
 }
 
+async function notifyAll(text: string): Promise<void> {
+  for (const jid of new Set(Object.values(NAME_TO_JID))) {
+    try {
+      await sendMessage(jid, text);
+    } catch (err) {
+      console.error(`Erro ao notificar ${jid}:`, err);
+    }
+  }
+}
+
 const GASTOS_FIXOS_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hora
 
 async function main() {
@@ -212,10 +250,12 @@ async function main() {
 
   setInterval(() => {
     checkGastosFixos(notifyByName).catch(err => console.error('Erro ao checar gastos fixos:', err));
+    checkResumosEBackup(notifyAll).catch(err => console.error('Erro ao checar resumos/backup:', err));
   }, GASTOS_FIXOS_CHECK_INTERVAL_MS);
 
   setTimeout(() => {
     checkGastosFixos(notifyByName).catch(err => console.error('Erro ao checar gastos fixos:', err));
+    checkResumosEBackup(notifyAll).catch(err => console.error('Erro ao checar resumos/backup:', err));
   }, 15 * 1000);
 }
 
