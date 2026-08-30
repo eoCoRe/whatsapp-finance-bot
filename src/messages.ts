@@ -1,4 +1,4 @@
-import { Expense, Financing, ResumoPeriodo } from './types';
+import { Expense, Financing, ResumoPeriodo, ConsultaGeral } from './types';
 
 function pick<T>(options: T[]): T {
   return options[Math.floor(Math.random() * options.length)];
@@ -71,7 +71,8 @@ const NAO_IDENTIFICADO = [
     `• "meta de 540 por mês no mercado"\n` +
     `• "meu salário é 5000 por mês"\n` +
     `• "a internet é 120, vence dia 10"\n` +
-    `• "apaga o último gasto" 🐾`,
+    `• "apaga o último gasto"\n` +
+    `• "como estão as finanças?" 🐾`,
   (parent: string) =>
     `🐶❓ Xiii ${parent}, essa eu não entendi! Pode ser algo tipo:\n` +
     `• "gastei 30 na farmácia no pix"\n` +
@@ -412,6 +413,63 @@ export function orcamentoGeralAlerta(gastoTotal: number, rendaTotal: number): st
   }
 
   return null;
+}
+
+// ---------- Consulta por texto ----------
+
+export function consultaCategoria(parent: string, categoria: string, gasto: number, meta: number): string {
+  const metaLine = meta > 0 ? progressoMeta(categoria, gasto, meta) : null;
+  return (
+    `📊🐷 Aqui está, ${parent}!\n\n` +
+    `💸 *${categoria}*: ${formatBRL(gasto)} gastos esse mês\n` +
+    (metaLine ? `${metaLine}\n` : `(sem meta definida pra essa categoria)\n`) +
+    `\n${pick(GASTO_SIGN_OFFS)}`
+  );
+}
+
+export function consultaGeral(parent: string, c: ConsultaGeral): string {
+  const variacao =
+    c.gastoMesAnteriorMesmoDia > 0
+      ? (((c.gastoMesAtual - c.gastoMesAnteriorMesmoDia) / c.gastoMesAnteriorMesmoDia) * 100).toFixed(0)
+      : null;
+
+  const comparativoLine =
+    variacao !== null
+      ? `📈 ${Number(variacao) >= 0 ? 'Gastando' : 'Economizando'} ${Math.abs(Number(variacao))}% ${Number(variacao) >= 0 ? 'a mais' : 'a menos'} que no mesmo período do mês passado (${formatBRL(c.gastoMesAnteriorMesmoDia)}).\n`
+      : '';
+
+  const saldoLine =
+    c.rendaTotal > 0
+      ? `📈 Renda: ${formatBRL(c.rendaTotal)} | Saldo do mês: ${formatBRL(c.saldoMes)}\n`
+      : '';
+
+  const compromissoLine =
+    c.compromissoMensalFixo > 0
+      ? `🔁 Compromisso mensal fixo (financiamentos + gastos fixos): ${formatBRL(c.compromissoMensalFixo)}\n`
+      : '';
+
+  const metasLines = c.metas
+    .map(m => `   ${progressoMeta(m.categoria, m.gasto, m.meta)}`)
+    .join('\n');
+
+  return (
+    `📊🐷 Situação das finanças, ${parent}!\n\n` +
+    `💸 Gasto esse mês: ${formatBRL(c.gastoMesAtual)}\n` +
+    comparativoLine +
+    saldoLine +
+    compromissoLine +
+    (metasLines ? `\n🎯 Suas metas:\n${metasLines}\n` : '') +
+    `\n${pick(GASTO_SIGN_OFFS)}`
+  );
+}
+
+const ERRO_CONSULTA = [
+  (parent: string) => `😥 Quis responder, ${parent}, mas travei tentando ler a planilha. Confere aí? 🐾`,
+  (parent: string) => `🙈🐷 ${parent}, travei tentando consultar as finanças. Dá uma olhada na planilha pra mim? 🐾`,
+];
+
+export function erroConsulta(parent: string): string {
+  return pick(ERRO_CONSULTA)(parent);
 }
 
 // ---------- Erro no backup automático ----------

@@ -1,6 +1,6 @@
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
-import { Expense, Financing, FinancingType, FixedExpense, ResumoPeriodo } from './types';
+import { Expense, Financing, FinancingType, FixedExpense, ResumoPeriodo, ConsultaGeral } from './types';
 
 let doc: GoogleSpreadsheet | null = null;
 
@@ -483,4 +483,88 @@ export async function marcarGastoFixoLancado(id: string, mesLancado: string): Pr
     row.set('UltimoMesLancado', mesLancado);
     await row.save();
   }
+}
+
+// Soma quanto já está "comprometido" todo mês: parcelas de financiamentos
+// ainda não quitados + todos os gastos fixos cadastrados.
+export async function getCompromissoMensalFixo(): Promise<number> {
+  const financings = await listFinancings();
+  const totalFinanciamentos = financings
+    .filter(f => f.parcelasPagas < f.parcelasTotais)
+    .reduce((soma, f) => soma + f.valorParcela, 0);
+
+  const fixos = await listGastosFixos();
+  const totalFixos = fixos.reduce((soma, f) => soma + f.valor, 0);
+
+  return totalFinanciamentos + totalFixos;
+}
+
+// Visão geral pra responder perguntas tipo "como estão as finanças?": gasto
+// do mês, comparação com o mesmo período do mês passado, saldo vs renda,
+// compromisso fixo e progresso das metas do responsável que perguntou.
+export async function getConsultaGeral(responsavel: string): Promise<ConsultaGeral> {
+  const spreadsheet = await getSheet();
+  const sheetName = process.env.GOOGLE_SHEET_NAME ?? 'Gastos';
+  const sheet = spreadsheet.sheetsByTitle[sheetName];
+
+  if (!sheet) {
+    throw new Error(`Aba "${sheetName}" não encontrada na planilha.`);
+  }
+
+  const rows = await sheet.getRows();
+  const hoje = new Date();
+  const diaAtual = hoje.getDate();
+  const mesAtualStr = `${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+  const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  const mesAnteriorStr = `${String(mesAnterior.getMonth() + 1).padStart(2, '0')}/${mesAnterior.getFullYear()}`;
+  const alvoResp = normalize(responsavel);
+
+  let gastoMesAtual = 0;
+  let gastoMesAnteriorMesmoDia = 0;
+  const gastoPorCategoriaResp: Record<string, number> = {};
+
+  for (const row of rows) {
+    const data = String(row.get('Data') ?? '');
+    const match = data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) continue;
+
+    const [, ddStr, mm, yyyy] = match;
+    const dd = Number(ddStr);
+    const chave = `${mm}/${yyyy}`;
+    const valor = parseNumber(row.get('Valor'));
+
+    if (chave === mesAtualStr) {
+      gastoMesAtual += valor;
+      if (normalize(String(row.get('Responsavel') ?? '')) === alvoResp) {
+        const categoria = String(row.get('Categoria') ?? '');
+        gastoPorCategoriaResp[categoria] = (gastoPorCategoriaResp[categoria] ?? 0) + valor;
+      }
+    } else if (chave === mesAnteriorStr && dd <= diaAtual) {
+      gastoMesAnteriorMesmoDia += valor;
+    }
+  }
+
+  const [rendaTotal, compromissoMensalFixo, metasSheet] = await Promise.all([
+    getRendaTotalGeral(),
+    getCompromissoMensalFixo(),
+    getMetasSheet(),
+  ]);
+
+  const metaRows = await metasSheet.getRows();
+  const metas = metaRows
+    .filter(r => normalize(String(r.get('Responsavel') ?? '')) === alvoResp)
+    .map(r => {
+      const categoria = String(r.get('Categoria') ?? '');
+      return { categoria, meta: parseNumber(r.get('ValorMeta')), gasto: gastoPorCategoriaResp[categoria] ?? 0 };
+    })
+    .filter(m => m.meta > 0);
+
+  return {
+    gastoMesAtual,
+    gastoMesAnteriorMesmoDia,
+    rendaTotal,
+    saldoMes: rendaTotal - gastoMesAtual,
+    compromissoMensalFixo,
+    metas,
+  };
 }

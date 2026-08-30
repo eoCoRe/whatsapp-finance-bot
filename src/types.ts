@@ -74,6 +74,19 @@ export interface ResumoPeriodo {
   porCategoria: { categoria: string; total: number }[];
 }
 
+export interface ConsultaGeral {
+  gastoMesAtual: number;
+  gastoMesAnteriorMesmoDia: number;
+  rendaTotal: number;
+  saldoMes: number;
+  compromissoMensalFixo: number;
+  metas: { categoria: string; meta: number; gasto: number }[];
+}
+
+export interface ParsedConsulta {
+  categoria: string | null;
+}
+
 export type ParsedMessage =
   | ({ tipo: 'gasto' } & ParsedExpense)
   | ({ tipo: 'financiamento_novo' } & ParsedFinancingNew)
@@ -81,5 +94,6 @@ export type ParsedMessage =
   | ({ tipo: 'definir_meta' } & ParsedMetaDefinida)
   | ({ tipo: 'renda_nova' } & ParsedRendaNova)
   | ({ tipo: 'gasto_fixo_novo' } & ParsedGastoFixoNovo)
+  | ({ tipo: 'consulta' } & ParsedConsulta)
   | { tipo: 'desfazer_ultimo_gasto' }
   | { tipo: 'nao_identificado' };

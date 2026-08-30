@@ -13,6 +13,7 @@ import {
   removerUltimoGasto,
   getGastoMesTotal,
   getRendaTotalGeral,
+  getConsultaGeral,
 } from './sheets';
 import { checkGastosFixos, checkResumosEBackup } from './scheduler';
 import { Expense } from './types';
@@ -110,6 +111,25 @@ async function handleMessage(chatId: string, senderJid: string, text: string): P
 
     await sendMessage(chatId, msg.gastoConfirmado(parent, expense, [metaLine, orcamentoLine]));
     console.log(`✅ Gasto registrado para ${senderName}: R$ ${expense.valor} em ${expense.categoria}`);
+    return;
+  }
+
+  if (parsed.tipo === 'consulta') {
+    try {
+      if (parsed.categoria) {
+        const [gasto, meta] = await Promise.all([
+          getGastoMesPorCategoria(parsed.categoria, senderName),
+          getMetaCategoria(parsed.categoria, senderName),
+        ]);
+        await sendMessage(chatId, msg.consultaCategoria(parent, parsed.categoria, gasto, meta));
+      } else {
+        const consulta = await getConsultaGeral(senderName);
+        await sendMessage(chatId, msg.consultaGeral(parent, consulta));
+      }
+    } catch (err) {
+      console.error('Erro ao responder consulta:', err);
+      await sendMessage(chatId, msg.erroConsulta(parent));
+    }
     return;
   }
 
