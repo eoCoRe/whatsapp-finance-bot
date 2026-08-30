@@ -159,6 +159,26 @@ async function main() {
     return `=SUMPRODUCT(${baseFilter}${extra}*(ISNUMBER(Gastos!C2:C5000))*Gastos!${col}2:${col}5000)`;
   };
 
+  // Índices das linhas de seção no Resumo (0-indexed) — calculados antes dos
+  // dados porque as fórmulas de Saldo/Compromisso/Metas referenciam outras
+  // células da própria aba pelo número da linha (1-indexed = índice + 1).
+  const titleRow = 0;
+  const mesRow = 2;
+  const pessoaHeaderRow = 4;
+  const totalGeralRow = 5;
+  const catHeaderRow = 9;
+  const pgtoHeaderRow = 9 + 1 + CATEGORIES.length + 1;
+  const saldoHeaderRow = pgtoHeaderRow + 1 + PAYMENT_METHODS.length + 1;
+  const rendaTotalRow = saldoHeaderRow + 1;
+  const gastoTotalRow = saldoHeaderRow + 2;
+  const saldoRow = saldoHeaderRow + 3;
+  const compromissoHeaderRow = saldoRow + 2;
+  const finRow = compromissoHeaderRow + 1;
+  const fixosRow = compromissoHeaderRow + 2;
+  const totalComprometidoRow = compromissoHeaderRow + 3;
+  const metasHeaderRow = totalComprometidoRow + 2;
+  const metasFirstRow = metasHeaderRow + 1;
+
   const resumoData = [
     ['💰 RESUMO DE GASTOS DO CASAL', '', ''],
     ['', '', ''],
@@ -174,6 +194,31 @@ async function main() {
     ['', '', ''],
     ['💳 POR FORMA DE PAGAMENTO', 'Valor (mês atual)', ''],
     ...PAYMENT_METHODS.map(m => [m, mthFormula('C', `Gastos!E2:E5000="${m}"`), '']),
+    ['', '', ''],
+    ['💵 SALDO DO MÊS', '', ''],
+    ['Renda Total', `=SUMPRODUCT((ISNUMBER(Renda!C2:C5000))*Renda!C2:C5000)`, ''],
+    ['Gasto Total', `=B${totalGeralRow + 1}`, ''],
+    ['Saldo', `=B${rendaTotalRow + 1}-B${gastoTotalRow + 1}`, ''],
+    ['', '', ''],
+    ['🔁 COMPROMISSO MENSAL FIXO', '', ''],
+    [
+      'Financiamentos (parcelas ativas)',
+      `=SUMPRODUCT((Financiamentos!F2:F5000<Financiamentos!G2:G5000)*(ISNUMBER(Financiamentos!E2:E5000))*Financiamentos!E2:E5000)`,
+      '',
+    ],
+    ['Gastos Fixos', `=SUMPRODUCT((ISNUMBER(GastosFixos!D2:D5000))*GastosFixos!D2:D5000)`, ''],
+    ['Total Comprometido', `=B${finRow + 1}+B${fixosRow + 1}`, ''],
+    ['', '', ''],
+    ['🎯 METAS DO MÊS', 'Meta', 'Gasto', '% Usado'],
+    ...CATEGORIES.map((cat, i) => {
+      const linha = metasFirstRow + i + 1;
+      return [
+        cat,
+        `=SUMIF(Metas!B2:B1000;"${cat}";Metas!C2:C1000)`,
+        mthFormula('C', `Gastos!D2:D5000="${cat}"`),
+        `=IF(B${linha}=0;"";C${linha}/B${linha})`,
+      ];
+    }),
   ];
 
   await sheets.spreadsheets.values.update({
@@ -183,12 +228,7 @@ async function main() {
     requestBody: { values: resumoData },
   });
 
-  // Índices das linhas de seção no Resumo (0-indexed)
-  const titleRow = 0;
-  const mesRow = 2;
-  const pessoaHeaderRow = 4;
-  const catHeaderRow = 9;
-  const pgtoHeaderRow = 9 + 1 + CATEGORIES.length + 1;
+  const metasLastRow = metasFirstRow + CATEGORIES.length; // exclusive
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,
@@ -198,7 +238,7 @@ async function main() {
         {
           updateDimensionProperties: {
             range: { sheetId: resumoId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
-            properties: { pixelSize: 220 },
+            properties: { pixelSize: 240 },
             fields: 'pixelSize',
           },
         },
@@ -206,7 +246,22 @@ async function main() {
         {
           updateDimensionProperties: {
             range: { sheetId: resumoId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 },
-            properties: { pixelSize: 180 },
+            properties: { pixelSize: 150 },
+            fields: 'pixelSize',
+          },
+        },
+        // Colunas C e D (usadas na seção de Metas: Gasto e % Usado)
+        {
+          updateDimensionProperties: {
+            range: { sheetId: resumoId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 },
+            properties: { pixelSize: 140 },
+            fields: 'pixelSize',
+          },
+        },
+        {
+          updateDimensionProperties: {
+            range: { sheetId: resumoId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 },
+            properties: { pixelSize: 100 },
             fields: 'pixelSize',
           },
         },
@@ -247,20 +302,126 @@ async function main() {
             fields: 'userEnteredFormat(backgroundColor,textFormat,verticalAlignment)',
           },
         },
-        // Headers das seções (POR PESSOA, POR CATEGORIA, POR PAGAMENTO)
-        ...[pessoaHeaderRow, catHeaderRow, pgtoHeaderRow].map(row => ({
+        // Headers de seção com 2 colunas (POR PESSOA, POR CATEGORIA, POR PAGAMENTO, SALDO, COMPROMISSO)
+        ...[pessoaHeaderRow, catHeaderRow, pgtoHeaderRow, saldoHeaderRow, compromissoHeaderRow].map(row => ({
           repeatCell: {
             range: { sheetId: resumoId, startRowIndex: row, endRowIndex: row + 1, startColumnIndex: 0, endColumnIndex: 2 },
             cell: headerCell('#2e7d32', '#ffffff', 11),
             fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
           },
         })),
-        // Formato moeda em todas as células da coluna B a partir da linha 5
+        // Header da seção de Metas (4 colunas: Categoria | Meta | Gasto | % Usado)
+        {
+          repeatCell: {
+            range: { sheetId: resumoId, startRowIndex: metasHeaderRow, endRowIndex: metasHeaderRow + 1, startColumnIndex: 0, endColumnIndex: 4 },
+            cell: headerCell('#2e7d32', '#ffffff', 11),
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+          },
+        },
+        // Formato moeda em todas as células da coluna B a partir da linha 5 (cobre Por Pessoa/Categoria/Pagamento, Saldo, Compromisso e Meta)
         {
           repeatCell: {
             range: { sheetId: resumoId, startRowIndex: 5, endRowIndex: 100, startColumnIndex: 1, endColumnIndex: 2 },
             cell: { userEnteredFormat: { numberFormat: currencyFmt() } },
             fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+        // Formato moeda na coluna C (Gasto) da seção de Metas
+        {
+          repeatCell: {
+            range: { sheetId: resumoId, startRowIndex: metasFirstRow, endRowIndex: metasLastRow, startColumnIndex: 2, endColumnIndex: 3 },
+            cell: { userEnteredFormat: { numberFormat: currencyFmt() } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+        // Formato percentual na coluna D (% Usado) da seção de Metas
+        {
+          repeatCell: {
+            range: { sheetId: resumoId, startRowIndex: metasFirstRow, endRowIndex: metasLastRow, startColumnIndex: 3, endColumnIndex: 4 },
+            cell: { userEnteredFormat: { numberFormat: { type: 'PERCENT', pattern: '0%' } } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+        // Formatação condicional: categoria estourou a meta → fundo vermelho
+        {
+          addConditionalFormatRule: {
+            rule: {
+              ranges: [{ sheetId: resumoId, startRowIndex: metasFirstRow, endRowIndex: metasLastRow, startColumnIndex: 0, endColumnIndex: 4 }],
+              booleanRule: {
+                condition: {
+                  type: 'CUSTOM_FORMULA',
+                  values: [{ userEnteredValue: `=AND($B${metasFirstRow + 1}>0;$C${metasFirstRow + 1}>$B${metasFirstRow + 1})` }],
+                },
+                format: { backgroundColor: hex('#f8d7da'), textFormat: { foregroundColor: hex('#842029'), bold: true } },
+              },
+            },
+            index: 0,
+          },
+        },
+        // Formatação condicional: categoria já passou de 80% da meta → fundo amarelo
+        {
+          addConditionalFormatRule: {
+            rule: {
+              ranges: [{ sheetId: resumoId, startRowIndex: metasFirstRow, endRowIndex: metasLastRow, startColumnIndex: 0, endColumnIndex: 4 }],
+              booleanRule: {
+                condition: {
+                  type: 'CUSTOM_FORMULA',
+                  values: [
+                    {
+                      userEnteredValue: `=AND($B${metasFirstRow + 1}>0;$C${metasFirstRow + 1}>=$B${metasFirstRow + 1}*0,8;$C${metasFirstRow + 1}<=$B${metasFirstRow + 1})`,
+                    },
+                  ],
+                },
+                format: { backgroundColor: hex('#fff3cd'), textFormat: { foregroundColor: hex('#664d03'), bold: true } },
+              },
+            },
+            index: 0,
+          },
+        },
+        // Gráfico de pizza com o gasto por categoria do mês atual
+        {
+          addChart: {
+            chart: {
+              spec: {
+                title: 'Gastos por Categoria (mês atual)',
+                pieChart: {
+                  legendPosition: 'RIGHT_LEGEND',
+                  domain: {
+                    sourceRange: {
+                      sources: [
+                        {
+                          sheetId: resumoId,
+                          startRowIndex: catHeaderRow + 1,
+                          endRowIndex: catHeaderRow + 1 + CATEGORIES.length,
+                          startColumnIndex: 0,
+                          endColumnIndex: 1,
+                        },
+                      ],
+                    },
+                  },
+                  series: {
+                    sourceRange: {
+                      sources: [
+                        {
+                          sheetId: resumoId,
+                          startRowIndex: catHeaderRow + 1,
+                          endRowIndex: catHeaderRow + 1 + CATEGORIES.length,
+                          startColumnIndex: 1,
+                          endColumnIndex: 2,
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+              position: {
+                overlayPosition: {
+                  anchorCell: { sheetId: resumoId, rowIndex: pessoaHeaderRow, columnIndex: 4 },
+                  widthPixels: 480,
+                  heightPixels: 320,
+                },
+              },
+            },
           },
         },
       ],

@@ -43,6 +43,15 @@ npm install
 npm run build
 ```
 
+> ⚠️ **Nota sobre VMs pequenas (ex: `VM.Standard.E2.1.Micro`, 1GB RAM):** o
+> `tsc` (compilador TypeScript) pode ser pesado demais pra rodar direto nessa
+> VM — pode travar ou ficar extremamente lento usando swap. Se isso
+> acontecer, compile localmente no seu PC (`npm run build`) e copie a pasta
+> `dist/` já pronta pra VM via `scp`, pulando o `npm run build` remoto:
+> ```powershell
+> scp -i "sua-chave.key" -r dist usuario@SEU_IP:/home/usuario/whatsapp-finance-bot/
+> ```
+
 ## 5. Configurar o `.env`
 
 ```bash
@@ -88,6 +97,8 @@ npm install
 npm run build
 pm2 restart whatsapp-finance-bot
 ```
+
+Se a VM for pequena e o `npm run build` travar/ficar lento demais, compile local e copie a `dist/` via `scp` (veja a nota no passo 4), depois só rode `pm2 restart whatsapp-finance-bot` na VM.
 
 ## Observações
 
